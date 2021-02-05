@@ -247,4 +247,10 @@ stm32f401xc: clean
 	@$(MAKE) demo STARTUP='$(CMSISDEV)/ST/STM32F4xx/Source/Templates/gcc/startup_stm32f401xc.s' \
 						LDSCRIPT='demo/stm32f401xc.ld' \
 						DEFINES='STM32F4 STM32F401xC USBD_SOF_DISABLED' \
-						CFLAGS='-mcpu=cortex-m4'						
+						CFLAGS='-mcpu=cortex-m4'
+
+stm32f723xx_hs: clean
+	@$(MAKE) demo STARTUP='$(CMSISDEV)/ST/STM32F7xx/Source/Templates/gcc/startup_stm32f723xx.s' \
+						LDSCRIPT='demo/stm32f723xx.ld' \
+						DEFINES='STM32F7 STM32F723xx USBD_SOF_DISABLED USBD_PRIMARY_OTGHS HSE_25MHZ' \
+						CFLAGS='-mcpu=cortex-m7 -gdwarf-4 -g3'

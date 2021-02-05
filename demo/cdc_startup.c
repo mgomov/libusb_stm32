@@ -114,7 +114,7 @@ static void cdc_init_rcc (void) {
 
 
 #elif defined(STM32F429xx) || defined(STM32F405xx) \
-    || defined(STM32F401xC) || defined(STM32F401xE)  || defined(STM32F411xE) 
+    || defined(STM32F401xC) || defined(STM32F401xE)  || defined(STM32F411xE)
     /* set flash latency 2WS */
     _BMD(FLASH->ACR, FLASH_ACR_LATENCY, FLASH_ACR_LATENCY_2WS);
     /* setting up PLL 16MHz HSI, VCO=144MHz, PLLP = 72MHz PLLQ = 48MHz  */
@@ -246,6 +246,175 @@ static void cdc_init_rcc (void) {
     /* using HSI16 as AHB/CPU clock, HSI48 as USB PHY clock */
     _BST(RCC->CRRCR, RCC_CRRCR_HSI48ON);
     _WBS(RCC->CRRCR, RCC_CRRCR_HSI48RDY);
+
+#elif defined(STM32F723xx)
+
+  #if defined(HSE_25MHZ)
+    // flash latency
+    _BST(FLASH->ACR, FLASH_ACR_LATENCY_7WS);
+
+    // enable hse
+    _BST(RCC->CR, RCC_CR_HSEON);
+    _BCL(RCC->CR, RCC_CR_HSION);
+    _WBS(RCC->CR, RCC_CR_HSERDY);
+
+    /* switch to HSE */
+    _BMD(RCC->CFGR, RCC_CFGR_SW, RCC_CFGR_SW_HSE);
+    _WVL(RCC->CFGR, RCC_CFGR_SWS, RCC_CFGR_SWS_HSE);
+
+    /* RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSE; */
+    /* RCC_OscInitStruct.HSEState = RCC_HSE_ON; */
+    /* RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON; */
+    /* RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE; */
+    /* RCC_OscInitStruct.PLL.PLLM = 25; */
+    /* RCC_OscInitStruct.PLL.PLLN = 432; */
+    /* RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV2; */
+    /* RCC_OscInitStruct.PLL.PLLQ = 9; */
+    _BMD(RCC->PLLCFGR,
+         RCC_PLLCFGR_PLLM | RCC_PLLCFGR_PLLN | RCC_PLLCFGR_PLLP | RCC_PLLCFGR_PLLSRC | RCC_PLLCFGR_PLLQ,
+         _VAL2FLD(RCC_PLLCFGR_PLLM, 25) | _VAL2FLD(RCC_PLLCFGR_PLLN, 432) | _VAL2FLD(RCC_PLLCFGR_PLLP, 0) |  (RCC_PLLCFGR_PLLSRC_HSE) | _VAL2FLD(RCC_PLLCFGR_PLLQ, 9)
+         /* _VAL2FLD(RCC_PLLCFGR_PLLM, 15) | _VAL2FLD(RCC_PLLCFGR_PLLN, 144) | _VAL2FLD(RCC_PLLCFGR_PLLP, 2) |  (RCC_PLLCFGR_PLLSRC_HSE) | _VAL2FLD(RCC_PLLCFGR_PLLQ, 5) */
+    );
+
+    // enable overdrive
+    _BST(RCC->APB1ENR, RCC_APB1ENR_PWREN);
+    _BST(PWR->CR1, PWR_CR1_ODEN);
+    _WBS(PWR->CSR1, PWR_CSR1_ODRDY);
+    _BST(PWR->CR1, PWR_CR1_ODSWEN);
+
+    // set pll as sys clock
+    _BMD(RCC->CFGR, RCC_CFGR_SW, RCC_CFGR_SW_PLL);
+    // ahb clk = sysclk
+    _BMD(RCC->CFGR, RCC_CFGR_HPRE, RCC_CFGR_HPRE_DIV1);
+    // apb1 = sysclk / 4
+    _BMD(RCC->CFGR, RCC_CFGR_PPRE1, RCC_CFGR_PPRE1_DIV4);
+    // apb2 = sysclk / 2
+    _BMD(RCC->CFGR, RCC_CFGR_PPRE2, RCC_CFGR_PPRE2_DIV2);
+
+    // enable usbhs peripheral clock
+    // (already done in driver enable down the line)
+    _BST(RCC->AHB1ENR, RCC_AHB1ENR_OTGHSEN);
+
+    // TODO not using external ulpi, but cube demo does? don't think this is necessary
+    _BST(RCC->AHB1ENR, RCC_AHB1ENR_OTGHSULPIEN);
+
+    // should be it for PLL config
+
+    // finally, enable PLL
+    _BST(RCC->CR, RCC_CR_PLLON);
+    _WBS(RCC->CR, RCC_CR_PLLRDY);
+
+    // swap to PLL as sysclk
+    _WVL(RCC->CFGR, RCC_CFGR_SWS, RCC_CFGR_SWS_PLL);
+
+
+    // per cubemx:
+
+    /* __HAL_RCC_GPIOA_CLK_ENABLE(); */
+    /* __HAL_RCC_GPIOB_CLK_ENABLE(); */
+    /* /\**USB_OTG_HS GPIO Configuration */
+    /*    PA4     ------> USB_OTG_HS_SOF */
+    /*    PB14     ------> USB_OTG_HS_DM */
+    /*    PB15     ------> USB_OTG_HS_DP */
+    /* *\/ */
+    /* GPIO_InitStruct.Pin = GPIO_PIN_4; */
+    /* GPIO_InitStruct.Mode = GPIO_MODE_AF_PP; */
+    /* GPIO_InitStruct.Pull = GPIO_NOPULL; */
+    /* GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH; */
+    /* GPIO_InitStruct.Alternate = GPIO_AF12_OTG_HS_FS; */
+    /* HAL_GPIO_Init(GPIOA, &GPIO_InitStruct); */
+
+    /* GPIO_InitStruct.Pin = GPIO_PIN_14|GPIO_PIN_15; */
+    /* GPIO_InitStruct.Mode = GPIO_MODE_AF_PP; */
+    /* GPIO_InitStruct.Pull = GPIO_NOPULL; */
+    /* GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH; */
+    /* GPIO_InitStruct.Alternate = GPIO_AF12_OTG_HS_FS; */
+
+    /* HAL_GPIO_Init(GPIOB, &GPIO_InitStruct); */
+
+    /* /\* USB_OTG_HS clock enable *\/ */
+    /* __HAL_RCC_OTGPHYC_CLK_ENABLE(); */
+    /* __HAL_RCC_USB_OTG_HS_CLK_ENABLE(); */
+    /* __HAL_RCC_USB_OTG_HS_ULPI_CLK_ENABLE(); */
+
+    // enable gpio clocks for otghs alt function pins (d+/d-)
+    _BST(RCC->AHB1ENR, RCC_AHB1ENR_GPIOAEN);
+    _BST(RCC->AHB1ENR, RCC_AHB1ENR_GPIOBEN);
+
+    // GPIOA
+    // a4 for SOF (TODO is this used?)
+    // alternate function (0b10)
+    _BST(GPIOA->MODER, GPIO_MODER_MODER4_1);
+
+    // (0b11) very high speed
+    _BST(GPIOA->OSPEEDR,
+         GPIO_OSPEEDR_OSPEEDR4_0 | GPIO_OSPEEDR_OSPEEDR4_1);
+
+    // (0b1100) AF12; AFR[0] == AFRL, so 4 is 4
+    _BST(GPIOA->AFR[0],
+         GPIO_AFRL_AFRL4_2 | GPIO_AFRL_AFRL4_3);
+
+    // GPIOB
+    // pb14, pb15
+    // (0b10) alternate function
+    _BST(GPIOB->MODER,
+         GPIO_MODER_MODER14_1 |
+         GPIO_MODER_MODER15_1);
+
+    // (0b11) very high speed
+    _BST(GPIOB->OSPEEDR,
+         GPIO_OSPEEDR_OSPEEDR14_0 | GPIO_OSPEEDR_OSPEEDR14_1 |
+         GPIO_OSPEEDR_OSPEEDR15_0 | GPIO_OSPEEDR_OSPEEDR15_1);
+
+    // (0b1100) AF12; AFR[1] == AFRH, so 6 & 7 are 14 & 15 respectively
+    _BST(GPIOB->AFR[1],
+         GPIO_AFRH_AFRH6_2 | GPIO_AFRH_AFRH6_3 |
+         GPIO_AFRH_AFRH7_2 | GPIO_AFRH_AFRH7_3);
+
+    // configure PHYC PLL to 25MHz
+    // TODO does pclk2 (apb2 clock) need to be at 25mhz here then???
+    _BST(USB_HS_PHYC->USB_HS_PHYC_PLL, USB_HS_PHYC_PLL1_PLLSEL_25MHZ);
+
+    // enable OTG PHYC clock
+    _BST(RCC->APB2ENR, RCC_APB2ENR_OTGPHYCEN);
+
+    // enable PLL1
+    _BST(USB_HS_PHYC->USB_HS_PHYC_PLL, USB_HS_PHYC_PLL1_PLLEN);
+
+    // enable the ldo (should be on by default?)
+    _BMD(USB_HS_PHYC->USB_HS_PHYC_LDO, USB_HS_PHYC_LDO_DISABLE, 0);
+
+
+  #else
+  #error USBFS for F723 not supported (you probably meant to use USBHS)
+    // TODO not done (and probably won't be for a bit)
+    /* enable hsi and wait for it to be up */
+    _BST(RCC->CR, RCC_CR_HSION);
+    _WBS(RCC->CR, RCC_CR_HSIRDY);
+
+    // use hsi for now
+    _BMD(RCC->CFGR, RCC_CFGR_SW, RCC_CFGR_SW_HSI);
+    _BMD(RCC->CFGR, RCC_CFGR_SWS, RCC_CFGR_SWS_HSI);
+
+    /* configure main PLL (don't care about the others?) */
+    /* per 134, "(selection of the HSI or HSE oscillator as PLL clock source, and configuration of division factors M, N, P, and Q)" */
+
+    /* hsi is the pll osc by default, but set for posterity */
+    /* setting up PLL 16MHz HSI, VCO=144MHz, PLLP = 72MHz PLLQ = 48MHz */
+    _BMD(RCC->PLLCFGR,
+         RCC_PLLCFGR_PLLM | RCC_PLLCFGR_PLLN | RCC_PLLCFGR_PLLP | RCC_PLLCFGR_PLLSRC | RCC_PLLCFGR_PLLQ,
+         _VAL2FLD(RCC_PLLCFGR_PLLM, 8) | _VAL2FLD(RCC_PLLCFGR_PLLN, 72) | _VAL2FLD(RCC_PLLCFGR_PLLP, 0) |  (RCC_PLLCFGR_PLLSRC_HSI) | _VAL2FLD(RCC_PLLCFGR_PLLQ, 3)
+    );
+
+    // finally, enable PLL
+    _BST(RCC->CR, RCC_CR_PLLON);
+    _WBS(RCC->CR, RCC_CR_PLLRDY);
+
+
+    #endif
+
+
+
 #else
     #error Not supported
 #endif
