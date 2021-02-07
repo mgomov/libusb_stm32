@@ -514,12 +514,14 @@ void main(void) {
     }
 }
 #else
+#define BWAIT for(volatile long i; 1;){ i++; }
 int main(void) {
     cdc_init_usbd();
     usbd_enable(&udev, true);
     usbd_connect(&udev, true);
     while(1) {
         usbd_poll(&udev);
+        BWAIT;
     }
     return 0;
 }
